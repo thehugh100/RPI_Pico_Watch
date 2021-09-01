@@ -6,6 +6,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <functional>
+#include <map>
 
 #include "SSH1106_SPI_Lite.h"
 #include "pico/util/datetime.h"
@@ -39,6 +41,11 @@ const char* weekdays[] = {
     "Fri",
     "Sat"
 };
+
+uint64_t lastDisplay = 0;
+uint64_t lastMillis = 0;
+uint64_t second = 0;
+uint64_t lastSecond = 0;
 
 uint64_t time_ms()
 {
@@ -80,6 +87,49 @@ void clearReceiveBuf()
 
 void parseCommand(std::string command)
 {
+    std::map<std::string, std::function<void(std::vector<std::string>&)>> commands;
+
+    commands["uptime"] = [&](std::vector<std::string>& tokens) {
+        if(tokens.size() == 1)
+        {
+            std::cout << "Uptime: " << time_ms() << " ms" << std::endl;
+        }
+        else
+        {
+            std::cout << "Too many arguments" << std::endl;
+        }
+    };
+    commands["time"] = [&](std::vector<std::string>& tokens) {
+        if(tokens.size() == 8)
+        {
+            // second, minute, hour, day, dotw, month, year
+            datetime_t dt = {0};
+            rtc_get_datetime(&dt);
+            dt.sec = std::atoi(tokens[1].c_str());
+            dt.min = std::atoi(tokens[2].c_str());
+            dt.hour = std::atoi(tokens[3].c_str());
+            dt.day = std::atoi(tokens[4].c_str());
+            dt.dotw = std::atoi(tokens[5].c_str());
+            dt.month = std::atoi(tokens[6].c_str());
+            dt.year = std::atoi(tokens[7].c_str());
+
+            lastMillis = time_ms();
+
+            rtc_set_datetime(&dt);
+        }
+        else
+        {
+            std::cout << "Incorrect Arguments, expecting: second minute hour day dotw month year" << std::endl;
+        }
+    };
+    commands["help"] = [&](std::vector<std::string>& tokens) {
+        std::cout << "Available Commands: " << std::endl;
+        for(auto &i : commands)
+        {
+            std::cout << i.first << std::endl;
+        }
+    };
+
     std::cout << "Command is: " << command << std::endl;
     std::vector<std::string> tokens;
     std::string currentToken = "";
@@ -98,33 +148,15 @@ void parseCommand(std::string command)
     if(currentToken != "")
         tokens.push_back(currentToken);
 
-    /* for(auto &i : tokens)
-    {
-        printf("Token: %s\r\n", i.c_str());
-    } */
-    
     if(tokens.size() >= 1)
     {
-        if(tokens[0] == "time")
+        if (commands.find(tokens[0]) != commands.end())
         {
-            if(tokens.size() == 8)
-            {
-                // second, minute, hour, day, dotw, month, year
-                datetime_t dt = {0};
-                rtc_get_datetime(&dt);
-                dt.sec = std::atoi(tokens[1].c_str());
-                dt.min = std::atoi(tokens[2].c_str());
-                dt.hour = std::atoi(tokens[3].c_str());
-                dt.day = std::atoi(tokens[4].c_str());
-                dt.dotw = std::atoi(tokens[5].c_str());
-                dt.month = std::atoi(tokens[6].c_str());
-                dt.year = std::atoi(tokens[7].c_str());
-                rtc_set_datetime(&dt);
-            }
-            else
-            {
-                std::cout << "Incorrect Arguments, expecting: second minute hour day dotw month year" << std::endl;
-            }
+            commands[tokens[0]](tokens);
+        }
+        else
+        {
+            std::cout << "Command not found." << std::endl;
         }
     }
     else
@@ -189,12 +221,6 @@ int main()
 
     rtc_init();
     rtc_set_datetime(&dt);
-
-    uint64_t lastDisplay = 0;
-
-    uint64_t lastMillis = 0;
-    uint64_t second = 0;
-    uint64_t lastSecond = 0;
 
     while(1)
     {
