@@ -13,6 +13,7 @@
 #include "pico/util/datetime.h"
 
 #include "font_manager.h"
+#include "fonts/moonphase.h"
 
 extern "C" {
     #include "hardware/rtc.h"
@@ -62,13 +63,22 @@ void updateDisplay(SSH1106 *oled, FontManager *fontManager, datetime_t* dt, uint
     int secLen = sprintf(sec, "%02d.%01d", dt->sec, ms);
     
     oled->clear();
-    fontManager->drawStringLarge(oled, timeD, 5, 0, 16);
 
+    fontManager->drawStringLarge(oled, timeD, 5, 0, 16);
     char date1[16] = {0};
     int date1Len = sprintf(date1, "%s %02d %s %02d", weekdays[dt->dotw], dt->day, months[dt->month-1], dt->year - 2000);
     fontManager->drawStringAscii(oled, date1, date1Len, 0, 63);
+    fontManager->drawStringAscii(oled, sec, 4, 44, 48); 
 
-    fontManager->drawStringAscii(oled, sec, 4, 44, 48);
+    for(int y = 0; y < 64; ++y)
+    {
+        for(int x = 0; x < 64; ++x)
+        {
+            int currentPhase = (time_ms() / 32) % 59;
+            int currentFrame = currentPhase * 64;
+            oled->drawPixel(x, y, moonphase[(y < 32 ? y : 63-y) * 3776 + x + currentFrame]);
+        }
+    }
 
     oled->display();
 }
