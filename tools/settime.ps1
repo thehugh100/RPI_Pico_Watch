@@ -9,6 +9,18 @@ $port.Write(“time ”)
 $d = Get-Date -UFormat '%S %M %H %d %u %m %Y'
 $port.WriteLine($d)
 $port.ReadLine()
+
 $port.DiscardInBuffer()
 $port.DiscardOutBuffer()
+
+$StartDate=(GET-DATE)
+$EndDate=[datetime]"08/08/2021 14:50"
+$DD = NEW-TIMESPAN -Start $EndDate -End $StartDate
+$port.Write(“moonphase ”)
+$port.WriteLine($DD.TotalDays)
+$port.ReadLine()
+
+$port.DiscardInBuffer()
+$port.DiscardOutBuffer()
+
 $port.Close()

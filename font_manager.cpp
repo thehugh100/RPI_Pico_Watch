@@ -24,10 +24,19 @@ void FontManager::drawCharacterAscii(SSH1106* oled, unsigned char character, uin
 
     void FontManager::drawStringAscii(SSH1106* oled, const char* str, size_t len, uint8_t x, uint8_t y)
     {
+        uint8_t ox = x;
         for(int i = 0; i < len; ++i)
         {
-            drawCharacterAscii(oled, str[i], x, y);
-            x+=10;
+            if(str[i] == '\n')
+            {
+                x = ox;
+                y += 16;
+            }
+            else
+            {
+                drawCharacterAscii(oled, str[i], x, y);
+                x+=10;
+            }
         }
     }
 

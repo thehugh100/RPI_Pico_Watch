@@ -8,7 +8,7 @@
 #include <vector>
 #include <functional>
 #include <map>
-
+#include <math.h>
 #include "SSH1106_SPI_Lite.h"
 #include "pico/util/datetime.h"
 
@@ -42,18 +42,61 @@ const char* weekdays[] = {
     "Fri",
     "Sat"
 };
+const char* moonphases[] = {
+    "New Moon",
+    "Waxing Crescent",
+    "First Quarter",
+    "Waxing Gibbous",
+    "Full Moon",
+    "Waning Gibbous",
+    "Third Quarter",
+    "Waning Crescent"
+};
+
 
 uint64_t lastDisplay = 0;
 uint64_t lastMillis = 0;
 uint64_t second = 0;
 uint64_t lastSecond = 0;
 
+#define SCREEN_TIME 0
+#define SCREEN_MOON 1
+int screen = SCREEN_TIME;
+
 uint64_t time_ms()
 {
     return us_to_ms(time_us_64());
 }
 
-void updateDisplay(SSH1106 *oled, FontManager *fontManager, datetime_t* dt, uint64_t lastMillis)
+float moonAge = 8;
+float moonAgeSetMS = 0;
+float moonPhaseSmooth = 0;
+
+void drawMoonPhase(SSH1106 *oled, FontManager *fontManager, datetime_t* dt)
+{
+    //int currentPhase = (time_ms() / 32) % 59;
+
+    float daysSinceSet = (time_ms() - moonAgeSetMS) / 86400000.f;
+    float targetMoonPhase = moonAge + daysSinceSet;
+    moonPhaseSmooth += (targetMoonPhase - moonPhaseSmooth) * .08;
+
+    int currentPhase = (int)(fmod(moonPhaseSmooth, 29.53f) * 2.) % 59;
+    int currentFrame = currentPhase * 64;
+
+    for(int y = 0; y < 64; ++y)
+    {
+        for(int x = 0; x < 64; ++x)
+        {
+            oled->drawPixel(x, y, moonphase[(y < 32 ? y : 63-y) * 3776 + x + currentFrame]);
+        }
+    }
+
+    char ageText[10] = {0};
+    int ageTextLen = sprintf(ageText, "%02d:%02d\nDays:\n%0.2f", dt->hour, dt->min, fmod(targetMoonPhase, 29.53f));
+    fontManager->drawStringAscii(oled, ageText, ageTextLen, 68, 63);
+}
+
+void drawTimeScreen(SSH1106 *oled, FontManager *fontManager, datetime_t* dt, uint64_t lastMillis)
 {
     char timeD[8] = {0};
     sprintf(timeD, "%02d:%02d", dt->hour, dt->min);
@@ -61,23 +104,26 @@ void updateDisplay(SSH1106 *oled, FontManager *fontManager, datetime_t* dt, uint
     char sec[16] = {0};
     int32_t ms = (time_ms() - lastMillis) / 100;
     int secLen = sprintf(sec, "%02d.%01d", dt->sec, ms);
-    
-    oled->clear();
 
     fontManager->drawStringLarge(oled, timeD, 5, 0, 16);
     char date1[16] = {0};
     int date1Len = sprintf(date1, "%s %02d %s %02d", weekdays[dt->dotw], dt->day, months[dt->month-1], dt->year - 2000);
     fontManager->drawStringAscii(oled, date1, date1Len, 0, 63);
     fontManager->drawStringAscii(oled, sec, 4, 44, 48); 
+}
 
-    for(int y = 0; y < 64; ++y)
+void updateDisplay(SSH1106 *oled, FontManager *fontManager, datetime_t* dt, uint64_t lastMillis)
+{
+    oled->clear();
+
+    switch (screen)
     {
-        for(int x = 0; x < 64; ++x)
-        {
-            int currentPhase = (time_ms() / 32) % 59;
-            int currentFrame = currentPhase * 64;
-            oled->drawPixel(x, y, moonphase[(y < 32 ? y : 63-y) * 3776 + x + currentFrame]);
-        }
+    case SCREEN_TIME:
+        drawTimeScreen(oled, fontManager, dt, lastMillis);
+        break;
+    case SCREEN_MOON:
+        drawMoonPhase(oled, fontManager, dt);
+        break;
     }
 
     oled->display();
@@ -103,6 +149,27 @@ void parseCommand(std::string command)
         if(tokens.size() == 1)
         {
             std::cout << "Uptime: " << time_ms() << " ms" << std::endl;
+        }
+        else
+        {
+            std::cout << "Too many arguments" << std::endl;
+        }
+    };
+    commands["moonphase"] = [&](std::vector<std::string>& tokens) {
+        if(tokens.size() == 2)
+        {
+            moonAge = std::atof(tokens[1].c_str());
+            moonAgeSetMS = time_ms();
+        }
+        else
+        {
+            std::cout << "Too many arguments" << std::endl;
+        }
+    };
+    commands["screen"] = [&](std::vector<std::string>& tokens) {
+        if(tokens.size() == 2)
+        {
+            screen = std::atoi(tokens[1].c_str());
         }
         else
         {
@@ -221,11 +288,11 @@ int main()
 
     datetime_t dt = {
         .year  = 2021,
-        .month = 8,
-        .day   = 22,
-        .dotw  = 0,
-        .hour  = 5,
-        .min   = 1,
+        .month = 9,
+        .day   = 2,
+        .dotw  = 4,
+        .hour  = 21,
+        .min   = 57,
         .sec   = 0
     };
 
