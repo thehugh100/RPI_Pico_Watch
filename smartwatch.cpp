@@ -14,6 +14,7 @@
 
 #include "font_manager.h"
 #include "fonts/moonphase.h"
+#include "fonts/moonphase_names.h"
 
 extern "C" {
     #include "hardware/rtc.h"
@@ -42,6 +43,7 @@ const char* weekdays[] = {
     "Fri",
     "Sat"
 };
+
 const char* moonphases[] = {
     "New Moon",
     "Waxing Crescent",
@@ -80,20 +82,32 @@ void drawMoonPhase(SSH1106 *oled, FontManager *fontManager, datetime_t* dt)
     float targetMoonPhase = moonAge + daysSinceSet;
     moonPhaseSmooth += (targetMoonPhase - moonPhaseSmooth) * .08;
 
-    int currentPhase = (int)(fmod(moonPhaseSmooth, 29.53f) * 2.) % 59;
+
+    int currentPhase = (int)(fmod(moonPhaseSmooth, 29.53f) * 8.) % 236;
     int currentFrame = currentPhase * 64;
 
     for(int y = 0; y < 64; ++y)
     {
         for(int x = 0; x < 64; ++x)
         {
-            oled->drawPixel(x, y, moonphase[(y < 32 ? y : 63-y) * 3776 + x + currentFrame]);
+            int lookup = (y < 32 ? y : 63-y) * 15104 + x + currentFrame;
+            oled->drawPixel(x, y, (moonphase[lookup / 8] >> (lookup % 8)) & 1);
         }
     }
 
     char ageText[10] = {0};
     int ageTextLen = sprintf(ageText, "%02d:%02d\nDays:\n%0.2f", dt->hour, dt->min, fmod(targetMoonPhase, 29.53f));
     fontManager->drawStringAscii(oled, ageText, ageTextLen, 68, 63);
+
+    int moonphaseIDX = fmod(moonPhaseSmooth, 29.53f) / 3.69125;
+
+    for(int y = 0; y < 16; ++y)
+    {
+        for(int x = 0; x < 48; ++x)
+        {
+            oled->drawPixel(70 + x, 48 + y, moonphase_names[(y + moonphaseIDX * 16) * 48 + x]);
+        }
+    }
 }
 
 void drawTimeScreen(SSH1106 *oled, FontManager *fontManager, datetime_t* dt, uint64_t lastMillis)
@@ -141,7 +155,7 @@ void clearReceiveBuf()
     }
 }
 
-void parseCommand(std::string command)
+void parseCommand(std::string command, SSH1106 *oled)
 {
     std::map<std::string, std::function<void(std::vector<std::string>&)>> commands;
 
@@ -170,6 +184,17 @@ void parseCommand(std::string command)
         if(tokens.size() == 2)
         {
             screen = std::atoi(tokens[1].c_str());
+        }
+        else
+        {
+            std::cout << "Too many arguments" << std::endl;
+        }
+    };
+    commands["reset_oled"] = [&](std::vector<std::string>& tokens) {
+        if(tokens.size() == 1)
+        {
+            oled->clear();
+            oled->init();
         }
         else
         {
@@ -242,7 +267,7 @@ void parseCommand(std::string command)
     }
 }
 
-void receiveSerial()
+void receiveSerial(SSH1106 *oled)
 {    
     while(1)
     {
@@ -260,7 +285,7 @@ void receiveSerial()
 
             if(rec == '\n' || rec == '\r')
             {
-                parseCommand(std::string(receiveBuffer, receiveLen));
+                parseCommand(std::string(receiveBuffer, receiveLen), oled);
                 clearReceiveBuf();
             }
             else
@@ -316,7 +341,7 @@ int main()
         {
             lastDisplay = time_ms();
             updateDisplay(&oled, &fontManager, &dt, lastMillis);
-            receiveSerial();
+            receiveSerial(&oled);
         }
     }
 }
