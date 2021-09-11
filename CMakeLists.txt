@@ -1,7 +1,9 @@
 add_executable(smartwatch
+        smartwatch.cpp
+        Input_Handler.h
+        Input_Handler.cpp
         font_manager.cpp
         font_manager.h
-        smartwatch.cpp
         SSH1106_SPI_Lite.h
         SSH1106_SPI_Lite.cpp
         )

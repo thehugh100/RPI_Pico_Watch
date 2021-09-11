@@ -16,6 +16,8 @@
 #include "fonts/moonphase.h"
 #include "fonts/moonphase_names.h"
 
+#include "Input_Handler.h"
+
 extern "C" {
     #include "hardware/rtc.h"
 }
@@ -301,57 +303,7 @@ void receiveSerial(SSH1106 *oled)
     }
 }
 
-struct InputHandler
-{
-    InputHandler()
-    {
-        for(int i = 0; i < 28; ++i)
-        {
-            gpioState[i] = gpioStatePrev[i] = gpioLastStateChange[i] = 0;
-        }
-    }
 
-    void registerGPIO(uint8_t pin)
-    {
-        trackingGPIO.push_back(pin);
-    }
-
-    void tick()
-    {
-        for(int i = 0; i < trackingGPIO.size(); ++i)
-        {
-            uint8_t pin = trackingGPIO[i];
-            gpioStatePrev[pin] = gpioState[pin];
-
-            bool val = !gpio_get(pin); /* Pullup */
-
-            if(val != gpioStatePrev[pin])
-            {
-                if(time_ms() - gpioLastStateChange[pin] < 50) //50ms debouncing
-                {
-                    continue;
-                }
-                gpioLastStateChange[pin] = time_ms();
-            }
-            gpioState[pin] = val;
-        }
-    }
-
-    bool isPressed(uint8_t pin)
-    {
-        return gpioState[pin] == 1 && gpioStatePrev[pin] == 0;
-    }
-
-    bool isReleased(uint8_t pin)
-    {
-        return gpioState[pin] == 0 && gpioStatePrev[pin] == 1;
-    }
-
-    bool gpioState[28];
-    bool gpioStatePrev[28];
-    int gpioLastStateChange[28];
-    std::vector<uint8_t> trackingGPIO;
-};
 
 int main() 
 {
@@ -403,7 +355,12 @@ int main()
             receiveSerial(&oled);
             inputHandler.tick();
 
-            if(inputHandler.isPressed(16))
+            if(inputHandler.isLongPressed(16))
+            {
+                std::cout << "Longed pressed" << std::endl;
+            }
+
+            if(inputHandler.isReleased(16))
             {
                 screen++;
                 screen %= 2;
